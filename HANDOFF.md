@@ -1,8 +1,8 @@
-# BCIKeyboardXR Backend — Live Handoff File
+# BCIKeyboardXR — Live Handoff File
 
 > **Purpose**: Persistent context for cross-session continuity. If context is cleared, start by reading this file.
 > **Last updated**: 2026-05-12
-> **Active stage**: ARCHITECT → COUNCIL REVIEW (in progress)
+> **Active stage**: UI layer complete
 
 ---
 
@@ -10,7 +10,7 @@
 
 - **Project**: BCIKeyboardXR — BCI-driven AAC interface (Cognixion internship take-home)
 - **Unity version**: Unity 6 LTS, macOS, 2D URP template
-- **This prompt**: Prompt 1 of 2 — Backend only (no UI, no scene wiring)
+- **This prompt**: Prompt 2 of 2 — UI layer complete
 - **Git branch**: main
 
 ---
@@ -19,13 +19,13 @@
 
 | Fact | Value |
 |------|-------|
-| Newtonsoft.Json installed? | **NO** — `com.unity.nuget.newtonsoft-json` absent from manifest.json |
+| Newtonsoft.Json installed? | **YES** — `com.unity.nuget.newtonsoft-json` present in manifest.json |
 | UnityWebRequest module | Present (`com.unity.modules.unitywebrequest`) |
 | config.json location | `Assets/Resources/config.json` — gitignored, do not touch |
-| Script folders (empty) | `Assets/Scripts/Core/`, `Assets/Scripts/LLM/`, `Assets/Scripts/UI/` |
+| Script folders | `Assets/Scripts/Core/`, `Assets/Scripts/LLM/`, `Assets/Scripts/UI/` |
 | Input system | `com.unity.inputsystem 1.19.0` |
 
-**Newtonsoft action required**: User must add `com.unity.nuget.newtonsoft-json` via Package Manager → Add package by name before entering Play mode. This must be documented in BACKEND_README.md.
+**Newtonsoft action**: Complete. `Packages/manifest.json` includes `com.unity.nuget.newtonsoft-json`.
 
 ---
 
@@ -42,8 +42,26 @@
 | `Assets/Scripts/LLM/LLMClient.cs` | ✅ Done | All 6 council items + reviewer critical fix |
 | `Assets/Scripts/LLM/PredictionTypes.cs` | ✅ Done | Includes HttpStatusCode diagnostic field |
 | `Assets/Scripts/LLM/PredictionService.cs` | ✅ Done | All 6 council items + reviewer fixes |
-| `Assets/Scripts/Core/BackendSmokeTest.cs` | ✅ Done | IEnumerator Start, throwaway markers |
+| `Assets/Scripts/Core/BackendSmokeTest.cs` | ✅ Removed | UI scene now exercises backend |
 | `Packages/manifest.json` | ✅ Done | com.unity.nuget.newtonsoft-json: 3.2.1 added |
+| `Assets/Scripts/UI/DwellSelectable.cs` | ✅ Done | Hover-dwell with radial progress and registry |
+| `Assets/Scripts/UI/FlickerTile.cs` | ✅ Done | SSVEP-style alpha modulation |
+| `Assets/Scripts/UI/PhraseTile.cs` | ✅ Done | Runtime-built glass phrase tile |
+| `Assets/Scripts/UI/WordTile.cs` | ✅ Done | Runtime-built glass word tile |
+| `Assets/Scripts/UI/KeyTile.cs` | ✅ Done | Standard/action keyboard key tile |
+| `Assets/Scripts/UI/PhraseRowController.cs` | ✅ Done | 4 phrase tiles, 2x2 grid |
+| `Assets/Scripts/UI/WordRowController.cs` | ✅ Done | 6 word tiles |
+| `Assets/Scripts/UI/KeyboardController.cs` | ✅ Done | QWERTY + punctuation + action keys |
+| `Assets/Scripts/UI/CompositionController.cs` | ✅ Done | Smart commits, ghost preview, pulse/fade |
+| `Assets/Scripts/UI/AppController.cs` | ✅ Done | Orchestrates UI and PredictionService |
+| `Assets/Scripts/UI/GhostPreviewHelper.cs` | ✅ Done | Preview helpers |
+| `Assets/Scripts/UI/UiTheme.cs` | ✅ Done | Runtime UI theme sprites/textures |
+| `Assets/Prefabs/PhraseTile.prefab` | ✅ Done | Script-root prefab; visuals build in Awake |
+| `Assets/Prefabs/WordTile.prefab` | ✅ Done | Script-root prefab; visuals build in Awake |
+| `Assets/Prefabs/KeyTile.prefab` | ✅ Done | Script-root prefab; visuals build in Awake |
+| `Assets/Prefabs/ActionKey.prefab` | ✅ Done | Gold action-key variant |
+| `Assets/Scenes/Main.unity` | ✅ Done | Contains Main Camera, PredictionService, AppController |
+| `UI_NOTES.md` | ✅ Done | Run notes, limitations, demo suggestions |
 
 ---
 
@@ -69,7 +87,7 @@
 
 ---
 
-## Key Design Decisions (RESOLVED by Architect — pending Council review)
+## Key Design Decisions (resolved)
 
 | Decision | Resolved Choice |
 |----------|----------------|
@@ -116,13 +134,38 @@
 | 2 | Council Review | ✅ APPROVED WITH CHANGES | `COUNCIL_BRIEF.md` |
 | 3 | Master Coder | ✅ Done | all .cs + .md files |
 | 4 | Reviewer | ✅ PASS (issues fixed) | inline fixes applied |
-| **5** | **NEXT: Prompt 2 UI layer** | ⏳ Not started | — |
+| **5** | **Prompt 2 UI layer** | ✅ Done | UI scripts, prefabs, Main scene, notes |
 
 ---
 
-## What Prompt 2 Needs from This Backend
+## UI Layer Status (2026-05-12)
 
-The UI layer (Prompt 2) will wire up to `PredictionService` via:
+`Assets/Scenes/Main.unity` is runnable. It contains a `PredictionService` GameObject and an `AppController` GameObject. `AppController` builds the full Screen Space Overlay Canvas at runtime:
+
+- top bar with Reset and Speak
+- 2x2 phrase grid
+- 6-tile word row
+- composition bar with committed text plus ghost preview
+- QWERTY keyboard with punctuation, Space, Backspace, and Enter
+
+The runtime-built UI uses generated rounded sprites and a pastel blue radial texture. Tile visuals, dwell progress images, hover rims, and labels are created by the tile/controller scripts if references are not assigned in the Inspector. Current polish includes hover lift/glow, dwell-ring pulse, selection flash/punch, flying commit labels, composition-bar pulse/stretch, reset fade-down, Speak button punch, and a very subtle breathing background.
+
+The UI integrates with `PredictionService.Instance`:
+
+- letters append characters and request word prediction
+- word commit appends a whole word, clears word tiles, and requests phrase prediction
+- phrase commit appends a whole phrase and requests fresh phrase prediction
+- Backspace removes the most recent committed word/phrase as a unit when applicable
+- Reset clears UI state and requests empty-context phrases
+- Speak logs the current sentence and pulses the composition bar
+
+Mouse hover is the gaze stand-in. Dwell selection uses Unity UI pointer enter/exit through an EventSystem with `InputSystemUIInputModule`.
+
+---
+
+## Backend Integration Surface
+
+The UI layer wires up to `PredictionService` via:
 ```csharp
 PredictionService.Instance.RequestWordPrediction(sentenceSoFar, partial, result => {
     // update word suggestion tiles
@@ -132,14 +175,13 @@ PredictionService.Instance.RequestPhrasePrediction(sentenceSoFar, result => {
 });
 ```
 Both callbacks are guaranteed on the Unity main thread.
-`PredictionService` must be attached to a persistent GameObject in Main scene before UI scripts run.
+`PredictionService` is attached to a GameObject in `Assets/Scenes/Main.unity`.
 
 ---
 
 ## Blocking Issues / Warnings
 
-1. **Newtonsoft not installed** — code will compile with `#if NEWTONSOFT_JSON` guard or use conditional compilation. Must instruct user to install.
-2. **No UI work** — PredictionService callbacks must marshal to main thread; UI scripts will wire up in Prompt 2.
+No known project blockers. `dotnet build Assembly-CSharp.csproj` passes from Codex with one existing `ConfigLoader.ApiConfig.anthropic_api_key` warning. DOTween is declared in `Packages/manifest.json`, but Unity still needs the editor-only `Tools > Demigiant > DOTween Utility Panel > Setup DOTween` step if you want to convert the coroutine tweens to DOTween-backed sequences.
 
 ---
 
@@ -148,6 +190,7 @@ Both callbacks are guaranteed on the Unity main thread.
 ```
 BCIKeyboardXR.Core   → Assets/Scripts/Core/
 BCIKeyboardXR.LLM    → Assets/Scripts/LLM/
+BCIKeyboardXR.UI     → Assets/Scripts/UI/
 ```
 
 ---
@@ -159,5 +202,5 @@ BCIKeyboardXR.LLM    → Assets/Scripts/LLM/
 3. Check Agent Pipeline Status for current stage.
 4. The Anthropic API shape above is verified — do not re-research.
 5. Do NOT modify `Assets/Resources/config.json`.
-6. Newtonsoft.Json must be used but requires a manual install step from the user.
-7. Continue from the last incomplete stage in the pipeline.
+6. Newtonsoft.Json is already declared in `Packages/manifest.json`.
+7. Continue with Unity Editor import/play-mode verification.

@@ -65,6 +65,11 @@ namespace BCIKeyboardXR.LLM
             "You output ONLY valid JSON — no prose, no markdown, no preamble. " +
             "Here is the profile of the user you are assisting:\n\n";
 
+        private const string PHRASE_CONTINUATION_INSTRUCTION =
+            "\n\nWhen generating phrase continuations, your output is appended verbatim to " +
+            "Sarah's typed text with one space separator. Do not include leading " +
+            "punctuation, leading spaces, or repeat any of Sarah's already-typed words.";
+
         // ---------------------------------------------------------------------------
         // Public API
         // ---------------------------------------------------------------------------
@@ -112,13 +117,17 @@ namespace BCIKeyboardXR.LLM
                 "[LLMClient] PredictWords must be called from the Unity main thread. " +
                 "Check for ConfigureAwait(false) leaking from upstream awaits in PredictionService.");
 
-            string userMessage =
-                $"Complete the partial word '{currentPartialWord}' in the context of the " +
-                $"sentence so far: '{sentenceSoFar}'. " +
-                "Output ONLY JSON, no preamble, no markdown fences: " +
-                "{\"completions\": [\"word1\", \"word2\", \"word3\", \"word4\", \"word5\", \"word6\"]}";
+            string userMessage = string.IsNullOrWhiteSpace(currentPartialWord)
+                ? $"Sarah has typed: '{sentenceSoFar}'. Suggest the 6 most likely next words " +
+                  "to continue the sentence. Each must be a single word, no punctuation. " +
+                  "Output ONLY JSON: " +
+                  "{\"completions\": [\"word1\", \"word2\", \"word3\", \"word4\", \"word5\", \"word6\"]}"
+                : $"Sarah is typing. Sentence so far: '{sentenceSoFar}'. " +
+                  $"Partial word: '{currentPartialWord}'. Suggest 6 completions for the partial " +
+                  "word that continue the sentence naturally. Output ONLY JSON: " +
+                  "{\"completions\": [\"word1\", \"word2\", \"word3\", \"word4\", \"word5\", \"word6\"]}";
 
-            string systemPrompt = BASE_SYSTEM_INSTRUCTION + UserProfile.GetSystemPromptSection();
+            string systemPrompt = BASE_SYSTEM_INSTRUCTION + UserProfile.GetSystemPromptSection() + PHRASE_CONTINUATION_INSTRUCTION;
 
             string rawResponse;
             long httpStatus;
@@ -168,12 +177,19 @@ namespace BCIKeyboardXR.LLM
                 "[LLMClient] PredictPhrases must be called from the Unity main thread. " +
                 "Check for ConfigureAwait(false) leaking from upstream awaits in PredictionService.");
 
-            string userMessage =
-                $"Suggest 4 complete phrases that Sarah might want to say next, given: '{sentenceSoFar}'. " +
-                "Output ONLY JSON, no preamble, no markdown fences: " +
-                "{\"phrases\": [\"phrase1\", \"phrase2\", \"phrase3\", \"phrase4\"]}";
+            string userMessage = string.IsNullOrWhiteSpace(sentenceSoFar)
+                ? "Sarah is starting a new message. Suggest 4 short phrases (3-6 words each) " +
+                  "she might want to say, based on her profile. Output ONLY JSON, no " +
+                  "preamble, no markdown fences: " +
+                  "{\"phrases\": [\"phrase1\", \"phrase2\", \"phrase3\", \"phrase4\"]}"
+                : $"Sarah has typed: '{sentenceSoFar}'. Suggest 4 short continuations (3-6 " +
+                  "words each) that grammatically extend this sentence. Each continuation " +
+                  "should read naturally when appended directly after what she has typed. " +
+                  "Do NOT repeat any words from what she has already typed. Output ONLY " +
+                  "JSON, no preamble, no markdown fences: " +
+                  "{\"phrases\": [\"continuation1\", \"continuation2\", \"continuation3\", \"continuation4\"]}";
 
-            string systemPrompt = BASE_SYSTEM_INSTRUCTION + UserProfile.GetSystemPromptSection();
+            string systemPrompt = BASE_SYSTEM_INSTRUCTION + UserProfile.GetSystemPromptSection() + PHRASE_CONTINUATION_INSTRUCTION;
 
             string rawResponse;
             long httpStatus;

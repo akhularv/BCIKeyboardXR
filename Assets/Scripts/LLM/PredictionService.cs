@@ -155,6 +155,9 @@ namespace BCIKeyboardXR.LLM
 
         private void OnDestroy()
         {
+            if (Instance == this)
+                Instance = null;
+
             // Cancel and dispose any in-flight requests to prevent callbacks
             // firing after this MonoBehaviour has been destroyed.
             _wordCts?.Cancel();
