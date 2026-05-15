@@ -11,6 +11,7 @@ namespace BCIKeyboardXR.UI
         [SerializeField] private Image raycastImage;
         [SerializeField] private Image shadowImage;
         [SerializeField] private Image contactShadowImage;
+        [SerializeField] private Image flickerOverlayImage;
         [SerializeField] private Image backgroundImage;
         [SerializeField] private Image tintImage;
         [SerializeField] private Image highlightImage;
@@ -112,11 +113,18 @@ namespace BCIKeyboardXR.UI
                 contactShadowImage = UiTheme.AddContactShadow(gameObject);
             contactShadowImage.sprite = UiTheme.PhraseSprite;
 
+            if (flickerOverlayImage == null)
+                flickerOverlayImage = UiTheme.AddImage(gameObject, "FlickerOverlay", UiTheme.FlickerLow, UiTheme.PhraseSprite);
+            flickerOverlayImage.sprite = UiTheme.PhraseSprite;
+            flickerOverlayImage.color = UiTheme.FlickerLow;
+            flickerOverlayImage.raycastTarget = false;
+
             if (backgroundImage == null)
                 backgroundImage = UiTheme.AddImage(gameObject, "Glass", UiTheme.Glass);
             backgroundImage.sprite = UiTheme.PhraseSprite;
             backgroundImage.color = UiTheme.Glass;
             backgroundImage.raycastTarget = false;
+            flickerOverlayImage.transform.SetSiblingIndex(backgroundImage.transform.GetSiblingIndex() + 1);
 
             if (tintImage == null)
             {
@@ -168,7 +176,8 @@ namespace BCIKeyboardXR.UI
             if (flickerTile == null)
                 flickerTile = gameObject.GetComponent<FlickerTile>() ?? gameObject.AddComponent<FlickerTile>();
 
-            flickerTile.TargetImage = backgroundImage;
+            flickerTile.TargetImage = flickerOverlayImage;
+            flickerTile.SetColorRange(UiTheme.FlickerLow, UiTheme.FlickerHigh);
 
             if (animator == null)
                 animator = gameObject.GetComponent<PremiumTileAnimator>() ?? gameObject.AddComponent<PremiumTileAnimator>();

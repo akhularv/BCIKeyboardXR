@@ -25,6 +25,8 @@ namespace BCIKeyboardXR.UI
         public static readonly Color HaloWarm = Hex(0xFF, 0xF8, 0xE8, 0.40f);
         public static readonly Color HaloComplete = Hex(0xB8, 0xD8, 0xFF, 0.70f);
         public static readonly Color Ghost = Hex(0x1F, 0x27, 0x35, 0.35f);
+        public static readonly Color FlickerLow = Hex(0xD7, 0xE8, 0xFF, 0.08f);
+        public static readonly Color FlickerHigh = Hex(0xFF, 0xFF, 0xFF, 0.38f);
 
         private static Sprite _roundedSprite;
         private static Sprite _phraseSprite;

@@ -24,6 +24,7 @@ namespace BCIKeyboardXR.UI
         private bool _built;
         private bool _subscribed;
         private float _nextFrequency = 11.0f;
+        private float _nextActionFrequency = 15.0f;
 
         private void Awake()
         {
@@ -53,6 +54,8 @@ namespace BCIKeyboardXR.UI
 
             _built = true;
             builtLayoutVersion = CurrentLayoutVersion;
+            _nextFrequency = 11.0f;
+            _nextActionFrequency = 15.0f;
             ClearExistingChildren();
             ClearLayoutGroups();
 
@@ -130,7 +133,7 @@ namespace BCIKeyboardXR.UI
             KeyTile tile = CreateKey(parent, variant);
             tile.name = name;
             tile.SetLabel(label, output, variant);
-            tile.SetFlickerHz(NextHz());
+            tile.SetFlickerHz(variant == KeyVariant.Action ? NextActionHz() : NextHz());
             SetAbsoluteRect(tile.GetComponent<RectTransform>(), x, y, width, height);
         }
 
@@ -215,6 +218,13 @@ namespace BCIKeyboardXR.UI
         {
             float hz = _nextFrequency;
             _nextFrequency += 0.1f;
+            return hz;
+        }
+
+        private float NextActionHz()
+        {
+            float hz = _nextActionFrequency;
+            _nextActionFrequency += 0.1f;
             return hz;
         }
 

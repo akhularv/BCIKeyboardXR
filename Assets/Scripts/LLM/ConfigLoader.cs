@@ -7,7 +7,7 @@
 //       JsonUtility cannot deserialize top-level Dictionaries, so a [Serializable] class is used.
 //
 // config.json expected shape:
-//   { "anthropic_api_key": "sk-ant-..." }
+//   { "anthropic_api_key": "sk-ant-...", "elevenlabs_api_key": "sk_..." }
 //
 // ACTION 4 (Council): ConfigLoader uses Lazy<string> with LazyThreadSafetyMode.ExecutionAndPublication
 //                     to eliminate the double-initialization race on simultaneous first access.
@@ -42,6 +42,10 @@ namespace BCIKeyboardXR.LLM
             LoadApiKey,
             LazyThreadSafetyMode.ExecutionAndPublication);
 
+        private static readonly Lazy<string> _elevenLabsApiKey = new Lazy<string>(
+            LoadElevenLabsApiKey,
+            LazyThreadSafetyMode.ExecutionAndPublication);
+
         // ---------------------------------------------------------------------------
         // Public API
         // ---------------------------------------------------------------------------
@@ -55,6 +59,12 @@ namespace BCIKeyboardXR.LLM
         /// is null or empty. The exception message includes actionable remediation text.
         /// </exception>
         public static string AnthropicApiKey => _apiKey.Value;
+
+        /// <summary>
+        /// Returns the optional ElevenLabs API key. Missing or empty keys return null
+        /// so callers can fall back to offline macOS speech.
+        /// </summary>
+        public static string ElevenLabsApiKey => _elevenLabsApiKey.Value;
 
         // ---------------------------------------------------------------------------
         // Private implementation
@@ -101,6 +111,26 @@ namespace BCIKeyboardXR.LLM
             return cfg.anthropic_api_key;
         }
 
+        private static string LoadElevenLabsApiKey()
+        {
+            var asset = Resources.Load<TextAsset>(RESOURCE_PATH);
+            if (asset == null)
+            {
+                Debug.LogWarning("[ConfigLoader] elevenlabs_api_key unavailable because config.json was not found.");
+                return null;
+            }
+
+            ApiConfig cfg = JsonUtility.FromJson<ApiConfig>(asset.text);
+            string key = cfg?.elevenlabs_api_key?.Trim();
+            if (string.IsNullOrEmpty(key))
+            {
+                Debug.LogWarning("[ConfigLoader] elevenlabs_api_key is missing or empty; TTS will fall back to macOS say.");
+                return null;
+            }
+
+            return key;
+        }
+
         // ---------------------------------------------------------------------------
         // Private serialization helper
         // ---------------------------------------------------------------------------
@@ -113,7 +143,8 @@ namespace BCIKeyboardXR.LLM
         private class ApiConfig
         {
             // ReSharper disable InconsistentNaming — field name must match JSON key exactly.
-            public string anthropic_api_key;
+            public string anthropic_api_key = null;
+            public string elevenlabs_api_key = null;
         }
     }
 }

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using BCIKeyboardXR.Core;
 using BCIKeyboardXR.LLM;
 using UnityEngine.InputSystem.UI;
 using System.Collections;
@@ -21,6 +22,10 @@ namespace BCIKeyboardXR.UI
 
         private Coroutine _backgroundBreathRoutine;
         private Coroutine _speakPunchRoutine;
+        private Coroutine _speakingPulseRoutine;
+        private Text _speakButtonLegacyText;
+        private TMPro.TextMeshProUGUI _speakButtonText;
+        private Image _speakButtonImage;
         private int _wordRequestVersion;
         private int _phraseRequestVersion;
         private string _lastCommittedAutocompleteWord = string.Empty;
@@ -54,6 +59,14 @@ namespace BCIKeyboardXR.UI
                 StopCoroutine(_backgroundBreathRoutine);
             if (_speakPunchRoutine != null)
                 StopCoroutine(_speakPunchRoutine);
+            if (_speakingPulseRoutine != null)
+                StopCoroutine(_speakingPulseRoutine);
+            TtsService.Stop();
+        }
+
+        private void OnApplicationQuit()
+        {
+            TtsService.Stop();
         }
 
         private void WireEvents()
@@ -109,6 +122,7 @@ namespace BCIKeyboardXR.UI
                     RequestWordPredictions();
                     break;
                 case "ENTER":
+                    EnsureSentenceEndingPunctuation();
                     HandleSpeak();
                     break;
                 default:
@@ -186,11 +200,26 @@ namespace BCIKeyboardXR.UI
 
         private void HandleSpeak()
         {
-            Debug.Log("[Speak] " + compositionController.CommittedText);
+            if (TtsService.IsSpeaking)
+            {
+                TtsService.Stop();
+                StopSpeakingVisuals();
+                return;
+            }
+
+            string text = compositionController.CommittedText.Trim();
+            if (string.IsNullOrEmpty(text))
+                return;
+
+            TtsService.Speak(text);
+
             if (_speakPunchRoutine != null)
                 StopCoroutine(_speakPunchRoutine);
             _speakPunchRoutine = StartCoroutine(ButtonPunchRoutine(speakButton != null ? speakButton.transform : null));
             compositionController.Pulse();
+
+            if (TtsService.IsSpeaking)
+                StartSpeakingVisuals();
         }
 
         private void StartBackgroundBreathing()
@@ -249,6 +278,87 @@ namespace BCIKeyboardXR.UI
 
             target.localScale = Vector3.one;
             _speakPunchRoutine = null;
+        }
+
+        private void StartSpeakingVisuals()
+        {
+            CacheSpeakButtonVisuals();
+            SetSpeakButtonState(true);
+
+            if (_speakingPulseRoutine != null)
+                StopCoroutine(_speakingPulseRoutine);
+
+            _speakingPulseRoutine = StartCoroutine(SpeakingPulseRoutine());
+        }
+
+        private void StopSpeakingVisuals()
+        {
+            if (_speakingPulseRoutine != null)
+            {
+                StopCoroutine(_speakingPulseRoutine);
+                _speakingPulseRoutine = null;
+            }
+
+            compositionController.RestoreBackground();
+            SetSpeakButtonState(false);
+        }
+
+        private IEnumerator SpeakingPulseRoutine()
+        {
+            var wait = new WaitForSecondsRealtime(0.1f);
+            while (TtsService.IsSpeaking)
+            {
+                float t = (Mathf.Sin(Time.unscaledTime * Mathf.PI * 2f * 0.8f) + 1f) * 0.5f;
+                compositionController.SetSpeakingPulseAlpha(Mathf.Lerp(0.6f, 0.9f, t));
+                yield return wait;
+            }
+
+            StopSpeakingVisuals();
+        }
+
+        private void CacheSpeakButtonVisuals()
+        {
+            if (speakButton == null)
+                return;
+
+            if (_speakButtonImage == null)
+                _speakButtonImage = speakButton.GetComponent<Image>();
+            if (_speakButtonText == null)
+                _speakButtonText = speakButton.GetComponentInChildren<TMPro.TextMeshProUGUI>(true);
+            if (_speakButtonLegacyText == null)
+                _speakButtonLegacyText = speakButton.GetComponentInChildren<Text>(true);
+        }
+
+        private void SetSpeakButtonState(bool speaking)
+        {
+            CacheSpeakButtonVisuals();
+
+            string label = speaking ? "STOP" : "SPEAK";
+            if (_speakButtonText != null)
+                _speakButtonText.text = label;
+            if (_speakButtonLegacyText != null)
+                _speakButtonLegacyText.text = label;
+
+            if (_speakButtonImage != null)
+                _speakButtonImage.color = speaking ? UiTheme.WarmGlassHover : UiTheme.Glass;
+        }
+
+        private void EnsureSentenceEndingPunctuation()
+        {
+            string text = compositionController.CommittedText.TrimEnd();
+            if (text.Length == 0 || EndsWithSentencePunctuation(text))
+                return;
+
+            compositionController.AppendChar('.');
+        }
+
+        private static bool EndsWithSentencePunctuation(string text)
+        {
+            if (string.IsNullOrEmpty(text))
+                return false;
+
+            char c = text[text.Length - 1];
+            return c == '.' || c == '?' || c == '!';
         }
 
         private void RequestWordPredictions()

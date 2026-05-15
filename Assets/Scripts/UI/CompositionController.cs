@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System;
 using System.Text;
+using BCIKeyboardXR.Core;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -41,6 +42,9 @@ namespace BCIKeyboardXR.UI
         private Coroutine _stretchRoutine;
         private Coroutine _resetFadeRoutine;
         private float _textAlpha = 1f;
+        private readonly Dictionary<int, Coroutine> _activeCharacterAnimations = new Dictionary<int, Coroutine>();
+        private readonly Dictionary<int, float> _characterWaveStartTimes = new Dictionary<int, float>();
+        private readonly List<int> _waveScratch = new List<int>();
 
         public string CommittedText => committedText;
         public string GhostText => ghostText;
@@ -51,6 +55,17 @@ namespace BCIKeyboardXR.UI
             Render();
         }
 
+        private void OnEnable()
+        {
+            TtsService.OnCharacterSpoken += HandleCharacterSpoken;
+        }
+
+        private void OnDisable()
+        {
+            TtsService.OnCharacterSpoken -= HandleCharacterSpoken;
+            ResetCharacterWaves();
+        }
+
         private void Update()
         {
             Render();
@@ -58,6 +73,7 @@ namespace BCIKeyboardXR.UI
 
         public void AppendChar(char character)
         {
+            ResetCharacterWaves();
             committedText += character;
             _commitStack.Push(new CommitRecord { Type = CommitType.Character, Length = 1 });
             Render();
@@ -86,6 +102,7 @@ namespace BCIKeyboardXR.UI
             if (committedText.Length > 0 && committedText[committedText.Length - 1] == ' ')
                 return;
 
+            ResetCharacterWaves();
             committedText += " ";
             _commitStack.Push(new CommitRecord { Type = CommitType.Space, Length = 1 });
             Render();
@@ -106,12 +123,14 @@ namespace BCIKeyboardXR.UI
             }
 
             removeLength = Mathf.Clamp(removeLength, 1, committedText.Length);
+            ResetCharacterWaves();
             committedText = committedText.Substring(0, committedText.Length - removeLength);
             Render();
         }
 
         public void Reset()
         {
+            ResetCharacterWaves();
             committedText = string.Empty;
             ghostText = string.Empty;
             _commitStack.Clear();
@@ -155,6 +174,26 @@ namespace BCIKeyboardXR.UI
             StretchAbsorb();
         }
 
+        public void SetSpeakingPulseAlpha(float alpha)
+        {
+            EnsureBuilt();
+            if (_pulseRoutine != null)
+            {
+                StopCoroutine(_pulseRoutine);
+                _pulseRoutine = null;
+            }
+
+            Color color = UiTheme.Glass;
+            color.a = alpha;
+            backgroundImage.color = color;
+        }
+
+        public void RestoreBackground()
+        {
+            EnsureBuilt();
+            backgroundImage.color = UiTheme.Glass;
+        }
+
         public void AnimateResetThen(Action onComplete)
         {
             EnsureBuilt();
@@ -166,6 +205,7 @@ namespace BCIKeyboardXR.UI
 
         private void ReplaceCurrentPartialWith(string replacement, CommitType type)
         {
+            ResetCharacterWaves();
             string partial = GetCurrentPartialWord();
             if (partial.Length > 0 && committedText.EndsWith(partial))
                 committedText = committedText.Substring(0, committedText.Length - partial.Length);
@@ -319,6 +359,8 @@ namespace BCIKeyboardXR.UI
             }
 
             textLabel.text = _builder.ToString();
+            if (_activeCharacterAnimations.Count > 0)
+                ApplyCharacterWaves();
         }
 
         private static string EscapeRichText(string value)
@@ -372,6 +414,127 @@ namespace BCIKeyboardXR.UI
             textLabel.fontStyle = FontStyles.Normal;
             if (UiTheme.RegularFont != null)
                 textLabel.font = UiTheme.RegularFont;
+        }
+
+        private void HandleCharacterSpoken(int characterIndex)
+        {
+            if (characterIndex < 0)
+            {
+                ResetCharacterWaves();
+                return;
+            }
+
+            if (characterIndex >= committedText.Length)
+                return;
+
+            if (_activeCharacterAnimations.TryGetValue(characterIndex, out Coroutine existing) && existing != null)
+                StopCoroutine(existing);
+
+            _characterWaveStartTimes[characterIndex] = Time.unscaledTime;
+            _activeCharacterAnimations[characterIndex] = StartCoroutine(CharacterWaveRoutine(characterIndex));
+            ApplyCharacterWaves();
+        }
+
+        private IEnumerator CharacterWaveRoutine(int characterIndex)
+        {
+            const float duration = 0.4f;
+            while (Time.unscaledTime - _characterWaveStartTimes[characterIndex] < duration)
+            {
+                ApplyCharacterWaves();
+                yield return null;
+            }
+
+            _activeCharacterAnimations.Remove(characterIndex);
+            _characterWaveStartTimes.Remove(characterIndex);
+            if (_characterWaveStartTimes.Count == 0)
+                ForceBaseMeshUpdate();
+            else
+                ApplyCharacterWaves();
+        }
+
+        private void ResetCharacterWaves()
+        {
+            foreach (Coroutine routine in _activeCharacterAnimations.Values)
+            {
+                if (routine != null)
+                    StopCoroutine(routine);
+            }
+
+            _activeCharacterAnimations.Clear();
+            _characterWaveStartTimes.Clear();
+
+            if (textLabel == null)
+                return;
+
+            ForceBaseMeshUpdate();
+        }
+
+        private void ApplyCharacterWaves()
+        {
+            if (textLabel == null || _characterWaveStartTimes.Count == 0)
+                return;
+
+            textLabel.ForceMeshUpdate();
+            TMP_TextInfo textInfo = textLabel.textInfo;
+
+            _waveScratch.Clear();
+            foreach (int characterIndex in _characterWaveStartTimes.Keys)
+                _waveScratch.Add(characterIndex);
+
+            for (int i = 0; i < _waveScratch.Count; i++)
+            {
+                int characterIndex = _waveScratch[i];
+                if (!_characterWaveStartTimes.TryGetValue(characterIndex, out float startTime))
+                    continue;
+                if (characterIndex < 0 || characterIndex >= textInfo.characterCount)
+                    continue;
+
+                TMP_CharacterInfo characterInfo = textInfo.characterInfo[characterIndex];
+                if (!characterInfo.isVisible)
+                    continue;
+
+                float elapsed = Mathf.Clamp01((Time.unscaledTime - startTime) / 0.4f);
+                float phase = elapsed <= 0.5f
+                    ? EaseOutBack(elapsed / 0.5f, 0.5f)
+                    : 1f - EaseInOutQuart((elapsed - 0.5f) / 0.5f);
+
+                float yOffset = Mathf.Lerp(0f, 6f, phase);
+                float scale = Mathf.Lerp(1f, 1.18f, phase);
+                float brighten = Mathf.Lerp(0f, 0.35f, phase);
+
+                int materialIndex = characterInfo.materialReferenceIndex;
+                int vertexIndex = characterInfo.vertexIndex;
+                Vector3[] vertices = textInfo.meshInfo[materialIndex].vertices;
+                Color32[] colors = textInfo.meshInfo[materialIndex].colors32;
+
+                Vector3 center = (vertices[vertexIndex] + vertices[vertexIndex + 1] + vertices[vertexIndex + 2] + vertices[vertexIndex + 3]) * 0.25f;
+                for (int v = 0; v < 4; v++)
+                {
+                    int index = vertexIndex + v;
+                    Vector3 direction = vertices[index] - center;
+                    vertices[index] = center + direction * scale + Vector3.up * yOffset;
+                    colors[index] = Color32.Lerp(colors[index], Color.white, brighten);
+                }
+            }
+
+            textLabel.UpdateVertexData(TMP_VertexDataUpdateFlags.All);
+        }
+
+        private void ForceBaseMeshUpdate()
+        {
+            textLabel.ForceMeshUpdate();
+            textLabel.UpdateVertexData(TMP_VertexDataUpdateFlags.All);
+        }
+
+        private static float EaseOutBack(float t, float overshoot)
+        {
+            t -= 1f;
+            return 1f + (overshoot + 1f) * t * t * t + overshoot * t * t;
+        }
+
+        private static float EaseInOutQuart(float t)
+        {
+            return t < 0.5f ? 8f * t * t * t * t : 1f - Mathf.Pow(-2f * t + 2f, 4f) * 0.5f;
         }
     }
 }
