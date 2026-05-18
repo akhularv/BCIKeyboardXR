@@ -100,10 +100,11 @@ namespace BCIKeyboardXR.UI
         {
             if (!string.IsNullOrWhiteSpace(_word))
             {
-                animator?.PlaySelection();
-                animator?.FlyLabelTo(flyTarget, _word);
-                OnWordSelected?.Invoke(_word);
-                ResetVisualState();
+                string selectedWord = _word;
+                animator?.FlyLabelTo(flyTarget, selectedWord);
+                ClearWord();
+                gameObject.SetActive(false);
+                OnWordSelected?.Invoke(selectedWord);
             }
         }
 
