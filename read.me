@@ -1,0 +1,89 @@
+# BCIKeyboardXR
+
+This project is a Unity 6 desktop prototype for a BCI-interaction driven Augmentative and Alternative Communication Keyboard. In this iteration, the mouse hover represents the participants gaze and SSVEP confirmation. Using an Anthropic LLM API, the keyboard is able to generate personalized word/phrase completion predictions based on what the user has written already. Using an ElevenLabs API, the keyboard is able to dictate the sentence with simultaneous character animation. 
+
+[Demo Video]
+
+# What I built and why
+
+Cognixion’s SSVEP keyboard was initially designed to allow debilitated users (ALS, paralysis) to communicate with those around them considering their lack of ability to have motor control over their body. With a standard SSVEP keyboard (just letters + punctuation), the user hits a productivity ceiling. By typing one character at a time, the user can max out at 30-40 characters per minute [800 ms dwell for key click - just above the Midas Touch threshold]. 
+
+This prototype is a single-screen keyboard interface that allows users to choose precision or speed with their communication. There are 3 rows of selection [and the sentence bar]: 
+* when the user looks ‘down’ they see the character keyboard, 
+* when the user looks in the ‘middle’ they see single word completions predicted from the current incomplete word and previous words,
+* when the user looks ‘up’ they see the whole phrase completion predicted from the previously typed words and characters. 
+
+The varying levels of communication control are mapped to eye position.
+* Look down → fine control, one key at a time. 
+* Look middle → slightly bigger picture, one word at a time.
+* Look up → biggest picture, complete the whole sentence. 
+The keyboard considers the user’s eye positioning (eye tracking) when deciding what level of communication the user is choosing to use. 
+
+The cursor hover dwell, like in the original keyboard, stands for the frequency-tag confirmation that comes from the BCI. Each tile flickers at a unique frequency between 6 and 15 Hz (0.5 Hz between each key). Each word/phrase tile also flickers at a unique frequency. This follows the original SSVEP keyboard classification. 
+
+Each user has a unique markdown user profile that is set (Assets/Resources/user_profile.md). This profile is considered in every LLM prompt call to assist in accurate word/phrase completion based on the user’s tendencies. 
+The current profile is ‘Sarah Martinez’, a 58 year old ALS patient. The markdown file includes her common requests, family member names, medical context, and high frequency phrases. By using this context, the predictions are based on her actual needs. This markdown file can be edited by a caregiver/family member. 
+
+
+# LLM integration
+
+Anthropic Claude Haiku 4.5 - the prediction mechanism
+
+There are two prediction call types that are routed through the Anthropic API. Both call types consider the user profile in the system prompt. User profile is loaded during startup and cached immediately. 
+
+WORD PREDICTION
+* Autocomplete → calls 6 completions of the currently partially typed word. LLM checks if it fits the sentence context. 
+* Next-Word → calls 6 next most likely words given the sentence so far. Generated after a space. 
+
+PHRASE PREDICTION
+* Continuation → 4 short continuation phrases (3-6 words) grammatically extend the sentence. The prompt requires the output to add the phrase to the already typed text. 
+* Empty context → 4 standalone phrases that the user is likely to say based on the profile. 
+
+COHERENCE FILTER → refines sentence after every phrase prediction, which ensures the case, punctuation, and grammar are correct. 
+
+ElevenLabs - dictation mechanism
+
+The ‘Speak’ button on the keyboard is driven by an ElevenLabs API call. The response consists of an audio (MP3) dictation and a timed character animation. 
+
+The audio plays through Unity AudioSource, and an event is triggered each time a character is spoken. As each character is focused on, the dictation reads it. Alongside the audio, each spoken character is also animated to move with the speech.
+
+When the ElevenLabs API communication falls through, the dictation reverses to simple macOS ‘say’. This pathway does not include the waving animation because ‘say’ does not provide timing information. 
+
+
+# What I would do with more time
+
+* REAL SSVEP processing (from BCI interaction) - The cursor dwell would ideally be replaced by SSVEP confirmation coming from observing the varying flickering signals in V1. 
+
+* REAL eye tracking (eye tracking program in VR) - The key/word/phrase decisions will be narrowed down by confirming what level the user is looking at. 
+
+* Eye gaze focused flickering - Only keys near the user’s gaze should be flickering. The rest of the keyboard should be stable. 
+
+* Visual Context integration - If the LLM could take input from the user’s visual scenario, it will predict the next phrase more accurately. Eg: Caregiver walks into room → LLM generates sentences/words with the Caregiver’s name and requests. 
+
+* Document mode - Users can ‘commit’ sentences to a document to the left, and they can dictate the entire document. Would allow users to type more than one sentence. Users can also copy the text from here and paste it in another application - like messages or a google search. 
+
+* History - Users can see the history of their previously typed sentences on the right side. They would be able to select the sentence to have it populate the sentence bar again. 
+
+* Profile editing user interface - A caregiver/family member can open this interface to easily change the content of the profile file. 
+
+* User-based dwell interactions - different users will prefer different dwell times for ‘clicking’. The dwell time should be personalized across users. 
+
+* More complex profile history - the MD file information can be shifted into a vector database of phrases, words, people, and personal context. This can allow the profile to grow and stay organized, and also allows the LLM to integrate information more accurately and specifically. 
+
+Given some more time, this AAC keyboard can become an all-in-one interface for smooth, fast communication. 
+
+# How to run the program
+
+Need: Unity 6+, macOS, Anthropic API Key (necessary), ElevenLabs API Key (optional - programs falls back to macOS ‘Say’). 
+
+1. Clone the repo and open in Unity Hub.
+2. Create `Assets/Resources/config.json`:
+```json
+   {
+     "anthropic_api_key": "sk-ant-...",
+     "elevenlabs_api_key": "sk_..."
+   }
+```
+3. Open `Assets/Scenes/Main.unity` and press Play.
+
+See `UI_NOTES.md` for a sample walkthrough.
