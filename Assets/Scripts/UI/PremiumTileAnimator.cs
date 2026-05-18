@@ -95,7 +95,7 @@ namespace BCIKeyboardXR.UI
             Vector3 endWorld = destination.TransformPoint(destination.rect.center);
             rect.position = startWorld;
             rect.sizeDelta = new Vector2(420f, 60f);
-            StartCoroutine(FlyRoutine(rect, group, startWorld, endWorld, 0.40f));
+            go.AddComponent<CommitFlyLabelMotion>().Play(rect, group, startWorld, endWorld, 0.40f);
         }
 
         private IEnumerator HoverRoutine(float targetScale, float targetOutlineAlpha, float seconds, bool keepOutlineEnabled)
@@ -174,21 +174,6 @@ namespace BCIKeyboardXR.UI
             }
         }
 
-        private static IEnumerator FlyRoutine(RectTransform rect, CanvasGroup group, Vector3 start, Vector3 end, float seconds)
-        {
-            float elapsed = 0f;
-            while (elapsed < seconds)
-            {
-                elapsed += Time.unscaledDeltaTime;
-                float t = EaseOutQuart(Mathf.Clamp01(elapsed / seconds));
-                rect.position = Vector3.LerpUnclamped(start, end, t);
-                group.alpha = 1f - Mathf.Clamp01(elapsed / seconds);
-                yield return null;
-            }
-
-            Destroy(rect.gameObject);
-        }
-
         private static void SetImageAlpha(Image image, float alpha)
         {
             Color color = image.color;
@@ -216,6 +201,29 @@ namespace BCIKeyboardXR.UI
             float c1 = overshoot;
             float c3 = c1 + 1f;
             return 1f + c3 * Mathf.Pow(t - 1f, 3f) + c1 * Mathf.Pow(t - 1f, 2f);
+        }
+    }
+
+    internal class CommitFlyLabelMotion : MonoBehaviour
+    {
+        public void Play(RectTransform rect, CanvasGroup group, Vector3 start, Vector3 end, float seconds)
+        {
+            StartCoroutine(FlyRoutine(rect, group, start, end, seconds));
+        }
+
+        private static IEnumerator FlyRoutine(RectTransform rect, CanvasGroup group, Vector3 start, Vector3 end, float seconds)
+        {
+            float elapsed = 0f;
+            while (elapsed < seconds)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                float t = 1f - Mathf.Pow(1f - Mathf.Clamp01(elapsed / seconds), 4f);
+                rect.position = Vector3.LerpUnclamped(start, end, t);
+                group.alpha = 1f - Mathf.Clamp01(elapsed / seconds);
+                yield return null;
+            }
+
+            Destroy(rect.gameObject);
         }
     }
 }
